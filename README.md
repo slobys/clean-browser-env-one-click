@@ -58,6 +58,7 @@ macOS / Linux：
 sh scripts/unix/clean-browser-env.sh start
 sh scripts/unix/clean-browser-env.sh start --browser chrome --url https://web.telegram.org/
 sh scripts/unix/clean-browser-env.sh fingerprint
+sh scripts/unix/clean-browser-env.sh fingerprint --simulate
 sh scripts/unix/clean-browser-env.sh doctor
 sh scripts/unix/clean-browser-env.sh list
 sh scripts/unix/clean-browser-env.sh cleanup
@@ -69,6 +70,7 @@ Windows PowerShell：
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\Start-CleanBrowserEnv.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\Start-CleanBrowserEnv.ps1 -Browser Chrome -Url https://web.telegram.org/
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\Start-CleanBrowserEnv.ps1 -Action Fingerprint
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\Start-CleanBrowserEnv.ps1 -Action Fingerprint -Simulate
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\Start-CleanBrowserEnv.ps1 -Action Doctor
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\Start-CleanBrowserEnv.ps1 -Action List
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\Start-CleanBrowserEnv.ps1 -Action Cleanup
@@ -86,6 +88,20 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\Start-CleanBrowserEnv
 - 一个本地生成的摘要哈希，方便你对比不同电脑或不同 Profile
 
 这个页面只在本地运行，不上传数据，也不修改真实网站看到的指纹。
+
+打开模拟面板：
+
+```sh
+sh scripts/unix/clean-browser-env.sh fingerprint --simulate
+```
+
+Windows：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\Start-CleanBrowserEnv.ps1 -Action Fingerprint -Simulate
+```
+
+模拟面板可以改 User-Agent、Platform、Language、Timezone、屏幕尺寸、CPU 线程、内存提示、触摸点、WebGL vendor/renderer。它只改变本地页面生成的“模拟报告”和摘要哈希，方便你对比参数变化后的报告形态；它不会改浏览器真实指纹，也不会影响真实网站。
 
 ## 推荐流程
 

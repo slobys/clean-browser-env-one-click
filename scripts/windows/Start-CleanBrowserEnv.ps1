@@ -7,6 +7,8 @@ param(
 
     [string]$Url = "about:blank",
 
+    [switch]$Simulate,
+
     [switch]$Yes
 )
 
@@ -112,8 +114,12 @@ function Start-FingerprintTest {
     if (-not (Test-Path $FingerprintPage)) {
         throw "未找到指纹测试页: $FingerprintPage"
     }
+    $pageUri = ([System.Uri](Resolve-Path $FingerprintPage).Path).AbsoluteUri
+    if ($Simulate) {
+        $pageUri = "$pageUri?simulate=1"
+    }
     Write-Log "打开本地指纹测试页"
-    Start-CleanEnv -StartUrl $FingerprintPage
+    Start-CleanEnv -StartUrl $pageUri
 }
 
 function Show-Doctor {

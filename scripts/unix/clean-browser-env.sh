@@ -25,14 +25,14 @@ usage() {
     cat <<'EOF_USAGE'
 用法:
   sh clean-browser-env.sh start [--browser auto|chrome|edge|firefox] [--url URL]
-  sh clean-browser-env.sh fingerprint [--browser auto|chrome|edge|firefox]
+  sh clean-browser-env.sh fingerprint [--browser auto|chrome|edge|firefox] [--simulate]
   sh clean-browser-env.sh doctor
   sh clean-browser-env.sh list
   sh clean-browser-env.sh cleanup [--yes]
 
 说明:
   start   创建一次性浏览器 Profile 并启动浏览器
-  fingerprint 创建一次性 Profile 并打开本地指纹测试页
+  fingerprint 创建一次性 Profile 并打开本地指纹测试页；--simulate 会展开本地模拟面板
   doctor  检查本机可用浏览器
   list    列出本工具创建的临时 Profile
   cleanup 只清理 ~/CleanBrowserEnv/profiles 下的临时 Profile
@@ -183,12 +183,16 @@ start_env() {
 
 fingerprint_test() {
     requested="auto"
+    simulate=0
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --browser)
                 shift
                 requested="${1:-auto}"
+                ;;
+            --simulate)
+                simulate=1
                 ;;
             -h|--help)
                 usage
@@ -202,8 +206,16 @@ fingerprint_test() {
     done
 
     [ -f "$FINGERPRINT_PAGE" ] || die "未找到指纹测试页: $FINGERPRINT_PAGE"
+    page_url="$FINGERPRINT_PAGE"
+    if [ "$simulate" -eq 1 ]; then
+        case "$page_url" in
+            file://*) page_url="${page_url}?simulate=1" ;;
+            /*) page_url="file://$(printf '%s' "$page_url" | sed 's/ /%20/g')?simulate=1" ;;
+            *) page_url="${page_url}?simulate=1" ;;
+        esac
+    fi
     log "打开本地指纹测试页"
-    start_env --browser "$requested" --url "$FINGERPRINT_PAGE"
+    start_env --browser "$requested" --url "$page_url"
 }
 
 doctor() {

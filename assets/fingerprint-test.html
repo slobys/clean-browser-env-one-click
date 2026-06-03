@@ -41,6 +41,10 @@
       color: ButtonText;
       cursor: pointer;
     }
+    button.secondary {
+      background: Canvas;
+      color: CanvasText;
+    }
     section {
       border-top: 1px solid color-mix(in srgb, CanvasText 16%, Canvas);
       padding: 18px 0;
@@ -85,6 +89,34 @@
       border-radius: 8px;
       background: color-mix(in srgb, CanvasText 8%, Canvas);
     }
+    .panel {
+      border: 1px solid color-mix(in srgb, CanvasText 16%, Canvas);
+      border-radius: 8px;
+      padding: 14px;
+      margin-top: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+    }
+    label {
+      display: grid;
+      gap: 4px;
+      font-size: 13px;
+    }
+    input, select {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px;
+      border: 1px solid color-mix(in srgb, CanvasText 18%, Canvas);
+      border-radius: 6px;
+      background: Canvas;
+      color: CanvasText;
+    }
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -95,6 +127,7 @@
       <button id="refresh">重新检测</button>
       <button id="copy">复制 JSON</button>
       <button id="download">下载报告</button>
+      <button id="toggle-sim" class="secondary">打开模拟面板</button>
     </div>
     <div class="summary">
       <div class="box"><span class="label">摘要哈希</span><strong id="hash">检测中...</strong></div>
@@ -102,6 +135,33 @@
       <div class="box"><span class="label">系统语言 / 时区</span><span id="locale">检测中...</span></div>
       <div class="box"><span class="label">屏幕</span><span id="screen">检测中...</span></div>
     </div>
+
+    <section id="simulation" class="hidden">
+      <h2>本地模拟参数</h2>
+      <p class="muted">这些输入只会改下面的“模拟报告”和模拟摘要哈希，不会改变浏览器本身，也不会影响真实网站看到的指纹。</p>
+      <div class="toolbar">
+        <button id="apply-sim">应用模拟</button>
+        <button id="reset-sim" class="secondary">恢复真实检测值</button>
+        <button id="preset-win" class="secondary">示例 Windows</button>
+        <button id="preset-mac" class="secondary">示例 macOS</button>
+      </div>
+      <div class="panel">
+        <div class="grid">
+          <label>User-Agent <input id="sim-ua"></label>
+          <label>Platform <input id="sim-platform"></label>
+          <label>Language <input id="sim-language"></label>
+          <label>Timezone <input id="sim-timezone"></label>
+          <label>Screen width <input id="sim-width" type="number" min="1"></label>
+          <label>Screen height <input id="sim-height" type="number" min="1"></label>
+          <label>Device pixel ratio <input id="sim-dpr" type="number" min="0.1" step="0.1"></label>
+          <label>CPU threads <input id="sim-cpu" type="number" min="1"></label>
+          <label>Device memory GB <input id="sim-memory" type="number" min="0" step="0.5"></label>
+          <label>Touch points <input id="sim-touch" type="number" min="0"></label>
+          <label>WebGL vendor <input id="sim-webgl-vendor"></label>
+          <label>WebGL renderer <input id="sim-webgl-renderer"></label>
+        </div>
+      </div>
+    </section>
 
     <section>
       <h2>信号明细</h2>
@@ -117,6 +177,7 @@
   <script>
     const textEncoder = new TextEncoder();
     let currentReport = {};
+    let actualReport = {};
 
     async function sha256(value) {
       const data = textEncoder.encode(value);
@@ -252,6 +313,93 @@
       return report;
     }
 
+    function cloneReport(report) {
+      return JSON.parse(JSON.stringify(report));
+    }
+
+    function field(id) {
+      return document.getElementById(id);
+    }
+
+    function setSimulationInputs(report) {
+      field("sim-ua").value = report.browser.userAgent || "";
+      field("sim-platform").value = report.browser.platform || "";
+      field("sim-language").value = report.locale.language || "";
+      field("sim-timezone").value = report.locale.timezone || "";
+      field("sim-width").value = report.screen.width || "";
+      field("sim-height").value = report.screen.height || "";
+      field("sim-dpr").value = report.screen.devicePixelRatio || "";
+      field("sim-cpu").value = report.hardware.hardwareConcurrency || "";
+      field("sim-memory").value = report.hardware.deviceMemory || "";
+      field("sim-touch").value = report.hardware.maxTouchPoints || 0;
+      field("sim-webgl-vendor").value = report.webgl && report.webgl.vendor ? report.webgl.vendor : "";
+      field("sim-webgl-renderer").value = report.webgl && report.webgl.renderer ? report.webgl.renderer : "";
+    }
+
+    function numberValue(id, fallback) {
+      const value = Number(field(id).value);
+      return Number.isFinite(value) ? value : fallback;
+    }
+
+    async function simulatedReportFromInputs() {
+      const report = cloneReport(actualReport);
+      report.mode = "local-simulation";
+      report.note = "本报告只在本地测试页模拟参数，不会改变浏览器真实指纹或真实网站看到的值。";
+      report.browser.userAgent = field("sim-ua").value;
+      report.browser.appVersion = field("sim-ua").value.replace(/^Mozilla\//, "");
+      report.browser.platform = field("sim-platform").value;
+      report.locale.language = field("sim-language").value;
+      report.locale.languages = field("sim-language").value ? [field("sim-language").value] : [];
+      report.locale.timezone = field("sim-timezone").value;
+      report.screen.width = numberValue("sim-width", report.screen.width);
+      report.screen.height = numberValue("sim-height", report.screen.height);
+      report.screen.availWidth = report.screen.width;
+      report.screen.availHeight = report.screen.height;
+      report.screen.devicePixelRatio = numberValue("sim-dpr", report.screen.devicePixelRatio);
+      report.hardware.hardwareConcurrency = numberValue("sim-cpu", report.hardware.hardwareConcurrency);
+      report.hardware.deviceMemory = numberValue("sim-memory", report.hardware.deviceMemory);
+      report.hardware.maxTouchPoints = numberValue("sim-touch", report.hardware.maxTouchPoints);
+      if (!report.webgl || !report.webgl.supported) {
+        report.webgl = { supported: true };
+      }
+      report.webgl.vendor = field("sim-webgl-vendor").value;
+      report.webgl.renderer = field("sim-webgl-renderer").value;
+      report.generatedAt = new Date().toISOString();
+      report.summaryHash = await sha256(JSON.stringify(report));
+      return report;
+    }
+
+    function applyPreset(name) {
+      if (name === "windows") {
+        field("sim-ua").value = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+        field("sim-platform").value = "Win32";
+        field("sim-language").value = "en-US";
+        field("sim-timezone").value = "America/Los_Angeles";
+        field("sim-width").value = "1920";
+        field("sim-height").value = "1080";
+        field("sim-dpr").value = "1";
+        field("sim-cpu").value = "8";
+        field("sim-memory").value = "8";
+        field("sim-touch").value = "0";
+        field("sim-webgl-vendor").value = "Google Inc. (NVIDIA)";
+        field("sim-webgl-renderer").value = "ANGLE (NVIDIA, NVIDIA GeForce, Direct3D11)";
+      }
+      if (name === "mac") {
+        field("sim-ua").value = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15";
+        field("sim-platform").value = "MacIntel";
+        field("sim-language").value = "en-US";
+        field("sim-timezone").value = "America/Los_Angeles";
+        field("sim-width").value = "1440";
+        field("sim-height").value = "900";
+        field("sim-dpr").value = "2";
+        field("sim-cpu").value = "8";
+        field("sim-memory").value = "8";
+        field("sim-touch").value = "0";
+        field("sim-webgl-vendor").value = "Apple Inc.";
+        field("sim-webgl-renderer").value = "Apple GPU";
+      }
+    }
+
     function flatten(value) {
       if (value === null || value === undefined) return "";
       if (typeof value === "object") return JSON.stringify(value, null, 2);
@@ -296,10 +444,34 @@
 
     async function refresh() {
       document.getElementById("json").textContent = "检测中...";
-      render(await collectReport());
+      actualReport = await collectReport();
+      setSimulationInputs(actualReport);
+      render(actualReport);
     }
 
     document.getElementById("refresh").addEventListener("click", refresh);
+    document.getElementById("toggle-sim").addEventListener("click", () => {
+      const panel = field("simulation");
+      panel.classList.toggle("hidden");
+      const open = !panel.classList.contains("hidden");
+      field("toggle-sim").textContent = open ? "关闭模拟面板" : "打开模拟面板";
+      if (open && actualReport.browser) setSimulationInputs(actualReport);
+    });
+    document.getElementById("apply-sim").addEventListener("click", async () => {
+      render(await simulatedReportFromInputs());
+    });
+    document.getElementById("reset-sim").addEventListener("click", () => {
+      setSimulationInputs(actualReport);
+      render(actualReport);
+    });
+    document.getElementById("preset-win").addEventListener("click", async () => {
+      applyPreset("windows");
+      render(await simulatedReportFromInputs());
+    });
+    document.getElementById("preset-mac").addEventListener("click", async () => {
+      applyPreset("mac");
+      render(await simulatedReportFromInputs());
+    });
     document.getElementById("copy").addEventListener("click", async () => {
       await navigator.clipboard.writeText(JSON.stringify(currentReport, null, 2));
     });
@@ -313,7 +485,12 @@
       URL.revokeObjectURL(url);
     });
 
-    refresh();
+    refresh().then(() => {
+      if (new URLSearchParams(location.search).get("simulate") === "1") {
+        field("simulation").classList.remove("hidden");
+        field("toggle-sim").textContent = "关闭模拟面板";
+      }
+    });
   </script>
 </body>
 </html>
