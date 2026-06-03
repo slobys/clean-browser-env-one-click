@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("Start", "Doctor", "List", "Cleanup")]
+    [ValidateSet("Start", "Fingerprint", "Doctor", "List", "Cleanup")]
     [string]$Action = "Start",
 
     [ValidateSet("Auto", "Chrome", "Edge", "Firefox")]
@@ -13,6 +13,8 @@ param(
 $ErrorActionPreference = "Stop"
 $AppHome = if ($env:CLEAN_ENV_HOME) { $env:CLEAN_ENV_HOME } else { Join-Path $env:USERPROFILE "CleanBrowserEnv" }
 $ProfileRoot = Join-Path $AppHome "profiles"
+$ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$FingerprintPage = if ($env:CLEAN_ENV_FINGERPRINT_PAGE) { $env:CLEAN_ENV_FINGERPRINT_PAGE } else { Join-Path $ProjectRoot "assets\fingerprint-test.html" }
 
 function Write-Log {
     param([string]$Message)
@@ -83,12 +85,14 @@ function New-ProfileDir {
 }
 
 function Start-CleanEnv {
+    param([string]$StartUrl = $Url)
+
     $resolved = Resolve-Browser $Browser
     $profile = New-ProfileDir
     $metadata = @(
         "created_at=$(Get-Date -Format o)"
         "browser=$($resolved.Name)"
-        "url=$Url"
+        "url=$StartUrl"
     )
     Set-Content -Path (Join-Path $profile "metadata.txt") -Value $metadata -Encoding UTF8
 
@@ -96,12 +100,20 @@ function Start-CleanEnv {
     Write-Log "Browser: $($resolved.Name)"
 
     if ($resolved.Name -eq "Firefox") {
-        $args = @("-profile", $profile, "-no-remote", "-new-instance", $Url)
+        $args = @("-profile", $profile, "-no-remote", "-new-instance", $StartUrl)
     } else {
-        $args = @("--user-data-dir=$profile", "--no-first-run", "--disable-sync", "--disable-extensions", "--new-window", $Url)
+        $args = @("--user-data-dir=$profile", "--no-first-run", "--disable-sync", "--disable-extensions", "--new-window", $StartUrl)
     }
     Start-Process -FilePath $resolved.Path -ArgumentList $args
     Write-Log "已启动。原有浏览器资料不会被修改。"
+}
+
+function Start-FingerprintTest {
+    if (-not (Test-Path $FingerprintPage)) {
+        throw "未找到指纹测试页: $FingerprintPage"
+    }
+    Write-Log "打开本地指纹测试页"
+    Start-CleanEnv -StartUrl $FingerprintPage
 }
 
 function Show-Doctor {
@@ -153,8 +165,8 @@ function Clear-Profiles {
 
 switch ($Action) {
     "Start" { Start-CleanEnv }
+    "Fingerprint" { Start-FingerprintTest }
     "Doctor" { Show-Doctor }
     "List" { Show-Profiles }
     "Cleanup" { Clear-Profiles }
 }
-

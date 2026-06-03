@@ -4,6 +4,9 @@ set -eu
 APP_HOME="${CLEAN_ENV_HOME:-$HOME/CleanBrowserEnv}"
 PROFILE_ROOT="$APP_HOME/profiles"
 DEFAULT_URL="${CLEAN_ENV_URL:-about:blank}"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
+FINGERPRINT_PAGE="${CLEAN_ENV_FINGERPRINT_PAGE:-$PROJECT_ROOT/assets/fingerprint-test.html}"
 
 log() {
     printf '%s\n' "==> $*"
@@ -22,12 +25,14 @@ usage() {
     cat <<'EOF_USAGE'
 用法:
   sh clean-browser-env.sh start [--browser auto|chrome|edge|firefox] [--url URL]
+  sh clean-browser-env.sh fingerprint [--browser auto|chrome|edge|firefox]
   sh clean-browser-env.sh doctor
   sh clean-browser-env.sh list
   sh clean-browser-env.sh cleanup [--yes]
 
 说明:
   start   创建一次性浏览器 Profile 并启动浏览器
+  fingerprint 创建一次性 Profile 并打开本地指纹测试页
   doctor  检查本机可用浏览器
   list    列出本工具创建的临时 Profile
   cleanup 只清理 ~/CleanBrowserEnv/profiles 下的临时 Profile
@@ -176,6 +181,31 @@ start_env() {
     log "已启动。原有浏览器资料不会被修改。"
 }
 
+fingerprint_test() {
+    requested="auto"
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --browser)
+                shift
+                requested="${1:-auto}"
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            *)
+                die "未知参数: $1"
+                ;;
+        esac
+        shift
+    done
+
+    [ -f "$FINGERPRINT_PAGE" ] || die "未找到指纹测试页: $FINGERPRINT_PAGE"
+    log "打开本地指纹测试页"
+    start_env --browser "$requested" --url "$FINGERPRINT_PAGE"
+}
+
 doctor() {
     log "Home: $APP_HOME"
     log "OS: $(uname -s)"
@@ -223,6 +253,10 @@ case "${1:-start}" in
         shift
         start_env "$@"
         ;;
+    fingerprint)
+        shift
+        fingerprint_test "$@"
+        ;;
     doctor)
         doctor
         ;;
@@ -240,4 +274,3 @@ case "${1:-start}" in
         die "未知命令: $1"
         ;;
 esac
-

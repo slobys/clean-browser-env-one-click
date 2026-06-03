@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fingerprint Test</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: Canvas;
+      color: CanvasText;
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+    .muted {
+      color: color-mix(in srgb, CanvasText 68%, Canvas);
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 18px 0;
+    }
+    button {
+      padding: 8px 12px;
+      border: 1px solid color-mix(in srgb, CanvasText 22%, Canvas);
+      border-radius: 6px;
+      background: ButtonFace;
+      color: ButtonText;
+      cursor: pointer;
+    }
+    section {
+      border-top: 1px solid color-mix(in srgb, CanvasText 16%, Canvas);
+      padding: 18px 0;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .box {
+      border: 1px solid color-mix(in srgb, CanvasText 16%, Canvas);
+      border-radius: 8px;
+      padding: 12px;
+      overflow-wrap: anywhere;
+    }
+    .label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      color: color-mix(in srgb, CanvasText 62%, Canvas);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border-top: 1px solid color-mix(in srgb, CanvasText 12%, Canvas);
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+    th {
+      width: 220px;
+      font-weight: 600;
+    }
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      border-radius: 8px;
+      background: color-mix(in srgb, CanvasText 8%, Canvas);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Fingerprint Test</h1>
+    <p class="muted">本页只在本地读取浏览器暴露的环境信号，用于测试电脑、浏览器 Profile 和系统环境差异。它不会上传数据，也不会伪造指纹。</p>
+    <div class="toolbar">
+      <button id="refresh">重新检测</button>
+      <button id="copy">复制 JSON</button>
+      <button id="download">下载报告</button>
+    </div>
+    <div class="summary">
+      <div class="box"><span class="label">摘要哈希</span><strong id="hash">检测中...</strong></div>
+      <div class="box"><span class="label">浏览器</span><span id="browser">检测中...</span></div>
+      <div class="box"><span class="label">系统语言 / 时区</span><span id="locale">检测中...</span></div>
+      <div class="box"><span class="label">屏幕</span><span id="screen">检测中...</span></div>
+    </div>
+
+    <section>
+      <h2>信号明细</h2>
+      <table id="signals"></table>
+    </section>
+
+    <section>
+      <h2>JSON 报告</h2>
+      <pre id="json">检测中...</pre>
+    </section>
+  </main>
+
+  <script>
+    const textEncoder = new TextEncoder();
+    let currentReport = {};
+
+    async function sha256(value) {
+      const data = textEncoder.encode(value);
+      const digest = await crypto.subtle.digest("SHA-256", data);
+      return Array.from(new Uint8Array(digest)).map(x => x.toString(16).padStart(2, "0")).join("");
+    }
+
+    async function canvasSignal() {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 360;
+        canvas.height = 90;
+        const ctx = canvas.getContext("2d");
+        ctx.textBaseline = "top";
+        ctx.fillStyle = "#f4f6fb";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#204b7a";
+        ctx.font = "16px Arial";
+        ctx.fillText("Clean Browser Env 指纹测试 12345", 12, 16);
+        ctx.fillStyle = "rgba(180, 70, 40, 0.65)";
+        ctx.arc(280, 42, 24, 0, Math.PI * 2);
+        ctx.fill();
+        return await sha256(canvas.toDataURL());
+      } catch (error) {
+        return `error: ${error.message}`;
+      }
+    }
+
+    function webglSignal() {
+      try {
+        const canvas = document.createElement("canvas");
+        const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+        if (!gl) return { supported: false };
+        const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+        return {
+          supported: true,
+          vendor: debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+          renderer: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+          version: gl.getParameter(gl.VERSION),
+          shadingLanguageVersion: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+          maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE)
+        };
+      } catch (error) {
+        return { supported: false, error: error.message };
+      }
+    }
+
+    async function audioSignal() {
+      try {
+        const AudioContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (!AudioContext) return "unsupported";
+        const context = new AudioContext(1, 44100, 44100);
+        const oscillator = context.createOscillator();
+        const compressor = context.createDynamicsCompressor();
+        oscillator.type = "triangle";
+        oscillator.frequency.value = 10000;
+        compressor.threshold.value = -50;
+        compressor.knee.value = 40;
+        compressor.ratio.value = 12;
+        compressor.attack.value = 0;
+        compressor.release.value = 0.25;
+        oscillator.connect(compressor);
+        compressor.connect(context.destination);
+        oscillator.start(0);
+        const buffer = await context.startRendering();
+        const sample = Array.from(buffer.getChannelData(0).slice(0, 120)).map(n => n.toFixed(6)).join(",");
+        return await sha256(sample);
+      } catch (error) {
+        return `error: ${error.message}`;
+      }
+    }
+
+    function storageSignal() {
+      const result = {};
+      for (const name of ["localStorage", "sessionStorage", "indexedDB"]) {
+        try {
+          result[name] = Boolean(window[name]);
+        } catch {
+          result[name] = false;
+        }
+      }
+      result.cookieEnabled = navigator.cookieEnabled;
+      return result;
+    }
+
+    async function collectReport() {
+      const nav = navigator;
+      const intl = Intl.DateTimeFormat().resolvedOptions();
+      const report = {
+        generatedAt: new Date().toISOString(),
+        browser: {
+          userAgent: nav.userAgent,
+          appVersion: nav.appVersion,
+          platform: nav.platform,
+          vendor: nav.vendor,
+          product: nav.product,
+          webdriver: nav.webdriver === true
+        },
+        locale: {
+          language: nav.language,
+          languages: Array.from(nav.languages || []),
+          timezone: intl.timeZone,
+          calendar: intl.calendar,
+          numberingSystem: intl.numberingSystem
+        },
+        screen: {
+          width: screen.width,
+          height: screen.height,
+          availWidth: screen.availWidth,
+          availHeight: screen.availHeight,
+          colorDepth: screen.colorDepth,
+          pixelDepth: screen.pixelDepth,
+          devicePixelRatio: window.devicePixelRatio
+        },
+        hardware: {
+          hardwareConcurrency: nav.hardwareConcurrency || null,
+          deviceMemory: nav.deviceMemory || null,
+          maxTouchPoints: nav.maxTouchPoints || 0
+        },
+        storage: storageSignal(),
+        permissionsApi: Boolean(nav.permissions),
+        connection: nav.connection ? {
+          effectiveType: nav.connection.effectiveType,
+          downlink: nav.connection.downlink,
+          rtt: nav.connection.rtt,
+          saveData: nav.connection.saveData
+        } : null,
+        canvasHash: await canvasSignal(),
+        audioHash: await audioSignal(),
+        webgl: webglSignal()
+      };
+      report.summaryHash = await sha256(JSON.stringify(report));
+      return report;
+    }
+
+    function flatten(value) {
+      if (value === null || value === undefined) return "";
+      if (typeof value === "object") return JSON.stringify(value, null, 2);
+      return String(value);
+    }
+
+    function render(report) {
+      currentReport = report;
+      document.getElementById("hash").textContent = report.summaryHash.slice(0, 24);
+      document.getElementById("browser").textContent = report.browser.userAgent;
+      document.getElementById("locale").textContent = `${report.locale.language} / ${report.locale.timezone}`;
+      document.getElementById("screen").textContent = `${report.screen.width}x${report.screen.height} @ ${report.screen.devicePixelRatio}`;
+      document.getElementById("json").textContent = JSON.stringify(report, null, 2);
+
+      const rows = [
+        ["User-Agent", report.browser.userAgent],
+        ["Platform", report.browser.platform],
+        ["Vendor", report.browser.vendor],
+        ["WebDriver", report.browser.webdriver],
+        ["Languages", report.locale.languages],
+        ["Timezone", report.locale.timezone],
+        ["Screen", report.screen],
+        ["Hardware", report.hardware],
+        ["Storage", report.storage],
+        ["Connection", report.connection],
+        ["Canvas Hash", report.canvasHash],
+        ["Audio Hash", report.audioHash],
+        ["WebGL", report.webgl]
+      ];
+      document.getElementById("signals").innerHTML = rows.map(([key, value]) =>
+        `<tr><th>${key}</th><td><pre>${escapeHtml(flatten(value))}</pre></td></tr>`
+      ).join("");
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    async function refresh() {
+      document.getElementById("json").textContent = "检测中...";
+      render(await collectReport());
+    }
+
+    document.getElementById("refresh").addEventListener("click", refresh);
+    document.getElementById("copy").addEventListener("click", async () => {
+      await navigator.clipboard.writeText(JSON.stringify(currentReport, null, 2));
+    });
+    document.getElementById("download").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(currentReport, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `fingerprint-report-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    refresh();
+  </script>
+</body>
+</html>
