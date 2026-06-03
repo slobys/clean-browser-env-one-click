@@ -116,7 +116,7 @@ function Start-FingerprintTest {
     }
     $pageUri = ([System.Uri](Resolve-Path $FingerprintPage).Path).AbsoluteUri
     if ($Simulate) {
-        $pageUri = "$pageUri?simulate=1"
+        $pageUri = "$pageUri#simulate"
     }
     Write-Log "打开本地指纹测试页"
     Start-CleanEnv -StartUrl $pageUri

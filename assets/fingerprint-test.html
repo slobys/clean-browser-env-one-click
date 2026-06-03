@@ -486,7 +486,10 @@
     });
 
     refresh().then(() => {
-      if (new URLSearchParams(location.search).get("simulate") === "1") {
+      const openSimulation =
+        new URLSearchParams(location.search).get("simulate") === "1" ||
+        location.hash.replace(/^#/, "") === "simulate";
+      if (openSimulation) {
         field("simulation").classList.remove("hidden");
         field("toggle-sim").textContent = "关闭模拟面板";
       }

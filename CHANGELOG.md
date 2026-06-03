@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.1.2
+
+- Fix Windows simulated fingerprint page launch by using a local page fragment instead of a query string.
+
+## v0.1.1
+
 - Add local-only simulation panel for fingerprint diagnostics.
 - Add `--simulate` / `-Simulate` launch option to open the diagnostics page with simulation controls visible.
 - Add local fingerprint test page for computer/browser diagnostics.

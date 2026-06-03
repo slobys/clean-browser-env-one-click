@@ -209,9 +209,9 @@ fingerprint_test() {
     page_url="$FINGERPRINT_PAGE"
     if [ "$simulate" -eq 1 ]; then
         case "$page_url" in
-            file://*) page_url="${page_url}?simulate=1" ;;
-            /*) page_url="file://$(printf '%s' "$page_url" | sed 's/ /%20/g')?simulate=1" ;;
-            *) page_url="${page_url}?simulate=1" ;;
+            file://*) page_url="${page_url}#simulate" ;;
+            /*) page_url="file://$(printf '%s' "$page_url" | sed 's/ /%20/g')#simulate" ;;
+            *) page_url="${page_url}#simulate" ;;
         esac
     fi
     log "打开本地指纹测试页"
